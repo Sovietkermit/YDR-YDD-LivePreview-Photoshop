@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>GTA Prop Viewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Adobe Clean', Arial, sans-serif;
+      background: #1e1e1e;
+      color: #ccc;
+      font-size: 12px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Toolbar ── */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #3a3a3a;
+      flex-shrink: 0;
+    }
+
+    #toolbar sp-button, button.tb-btn {
+      font-size: 11px;
+    }
+
+    button.tb-btn {
+      background: #3a3a3a;
+      color: #ccc;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 3px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.tb-btn:hover { background: #4a4a4a; }
+    button.tb-btn.active { background: #0078d4; color: #fff; border-color: #0078d4; }
+
+    /* ── Dropdown menus (Importer / Outils) ──
+       PAS de position:absolute — la <webview> native passe toujours par-dessus
+       un overlay positionné, donc le menu est en flux normal (flex column body),
+       il pousse le canvas-wrap au lieu de flotter par-dessus. */
+    .dropdown-menu {
+      background: #2e2e2e;
+      border-bottom: 1px solid #4a4a4a;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .dropdown-menu.hidden { display: none; }
+    .dropdown-item {
+      background: transparent;
+      color: #ccc;
+      border: none;
+      text-align: left;
+      padding: 7px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .dropdown-item:hover { background: #3f3f3f; }
+    .dropdown-item:not(:last-child) { border-bottom: 1px solid #3a3a3a; }
+
+    #ydr-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #888;
+      font-size: 11px;
+    }
+
+    /* ── Canvas ── */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #111;
+    }
+
+    #three-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #overlay-msg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #555;
+      pointer-events: none;
+    }
+    #overlay-msg.hidden { display: none; }
+    #overlay-msg svg { opacity: .3; }
+    #overlay-msg p { font-size: 13px; }
+
+    #texture-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      background: rgba(0,0,0,.6);
+      color: #0cf;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* ── Status bar ── */
+    #statusbar {
+      padding: 3px 8px;
+      background: #252525;
+      border-top: 1px solid #333;
+      font-size: 10px;
+      color: #666;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #statusbar.ok   { color: #4c4; }
+    #statusbar.warn { color: #fa0; }
+    #statusbar.err  { color: #f44; }
+
+    /* ── Debug panel ── */
+    #debug-panel {
+      background: #111;
+      border-top: 1px solid #333;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      max-height: 180px;
+    }
+    #debug-panel.hidden { display: none; }
+
+    #debug-header {
+      display: flex;
+      align-items: center;
+      padding: 3px 8px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      gap: 6px;
+    }
+    #debug-header span { flex: 1; font-size: 10px; color: #555; }
+
+    #debug-log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      line-height: 1.6;
+      user-select: text;       /* ← ajoute ça */
+      cursor: text;            /* ← et ça */
+    }
+    .log-info  { color: #88c; }
+    .log-ok    { color: #4c4; }
+    .log-warn  { color: #fa0; }
+    .log-err   { color: #f44; }
+    .log-dim   { color: #555; }
+
+    /* ── Panels inline (Config / Lier texture / Texture ytd) ──
+       PAS de position:fixed — la <webview> native est toujours rendue
+       par-dessus tout overlay fixed, donc on utilise un panel dans le
+       flux normal du document, comme #debug-panel. */
+    .side-panel {
+      background: #111;
+      border-top: 1px solid #333;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 12px;
+      gap: 10px;
+    }
+    .side-panel.hidden { display: none; }
+    .side-panel h3 { color: #ddd; font-size: 13px; margin: 0; }
+    .side-panel label { font-size: 11px; color: #aaa; display: block; margin-bottom: 3px; }
+    .side-panel input {
+      width: 100%;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      color: #ddd;
+      padding: 4px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .cfg-row { display: flex; gap: 6px; }
+    .cfg-row input { flex: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <button class="tb-btn dropdown-trigger" id="btn-menu-import">Importer ▾</button>
+    <span id="ydr-name">Aucun fichier</span>
+    <button class="tb-btn dropdown-trigger" id="btn-menu-tools">Outils ▾</button>
+  </div>
+
+  <!-- Menus déroulants en flux normal (pas absolute) — sinon la <webview>
+       native passe toujours par-dessus, peu importe z-index. -->
+  <div class="dropdown-menu hidden" id="menu-import">
+    <button class="dropdown-item" id="btn-import-ydr">Modèle (.ydr / .ydd / .yft)</button>
+    <button class="dropdown-item" id="btn-import-ytd">Texture (.ytd)</button>
+  </div>
+  <div class="dropdown-menu hidden" id="menu-tools">
+    <button class="dropdown-item" id="btn-link-doc">Lier une texture (document PS)</button>
+    <button class="dropdown-item" id="btn-launch-bridge">Lancer le bridge</button>
+    <button class="dropdown-item" id="btn-config">Configuration</button>
+    <button class="dropdown-item" id="btn-debug">Debug</button>
+  </div>
+
+  <!-- On remplace le canvas par une iframe pour bypasser le blocage WebGL d'UXP -->
+  <div id="canvas-wrap">
+     <webview id="viewer-frame" uxpAllowInspector="true" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none; background:#111;"></webview>
+     <div id="overlay-msg">
+       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.2">
+         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+       </svg>
+       <p>Importer un fichier .ydr</p>
+    </div>
+    <div id="texture-badge"></div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="statusbar">Prêt</div>
+
+  <!-- Debug panel -->
+  <div id="debug-panel" class="hidden">
+    <div id="debug-header">
+      <span>Console debug</span>
+      <button class="tb-btn" id="btn-clear-log">Effacer</button>
+    </div>
+    <div id="debug-log"></div>
+  </div>
+
+  <!-- Config modal -->
+  <div id="config-modal" class="side-panel hidden">
+    <div class="modal-box-content">
+      <h3>Configuration</h3>
+      <div>
+        <label>Chemin du bridge (YdrBridge.exe)</label>
+        <div class="cfg-row">
+          <input type="text" id="cfg-bridgepath" placeholder="D:\ydr-tool\bridge\publish\YdrBridge.exe" />
+          <button class="tb-btn" id="btn-browse-bridge">Parcourir</button>
+        </div>
+      </div>
+      <div>
+        <label>Dossier d'échange (avec YdrBridge --watch)</label>
+        <div class="cfg-row">
+          <input type="text" id="cfg-port" placeholder="Choisis un dossier..." />
+          <button class="tb-btn" id="btn-browse-exchange">Parcourir</button>
+        </div>
+      </div>
+      <div>
+        <label>Dossier CodeWalker (CodeWalker.Core.dll) — optionnel</label>
+        <div class="cfg-row">
+          <input type="text" id="cfg-cwdir" placeholder="D:\Application\CodeWalker30_dev48" />
+          <button class="tb-btn" id="btn-browse-cwdir">Parcourir</button>
+        </div>
+      </div>
+      <p style="font-size:10px; color:#888; line-height:1.5; margin:0;">
+        Le bouton "Lancer le bridge" écrit ces réglages dans bridge_config.json (à côté de l'exe)
+        puis ouvre le fichier ci-dessus. Si le chemin du bridge n'est pas configuré ou introuvable,
+        l'explorateur Windows s'ouvrira pour que tu le localises.
+      </p>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
+        <button class="tb-btn" id="btn-cfg-cancel">Annuler</button>
+        <button class="tb-btn active" id="btn-cfg-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Doc picker modal : choisir quel document PS est la texture du prop -->
+  <div id="docpicker-modal" class="side-panel hidden">
+    <div class="modal-box-content">
+      <h3>Lier une texture</h3>
+      <p style="font-size:10px; color:#888; margin:0;">
+        Choisis le document Photoshop ouvert qui correspond à la texture du prop :
+      </p>
+      <div id="docpicker-list" style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
+        <button class="tb-btn" id="btn-docpicker-cancel">Fermer</button>
+        <button class="tb-btn" id="btn-docpicker-refresh">Rafraîchir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Picker de texture depuis un .ytd importé -->
+  <div id="ytdpicker-modal" class="side-panel hidden">
+    <div class="modal-box-content">
+      <h3>Textures du .ytd</h3>
+      <p id="ytdpicker-status" style="font-size:10px; color:#888; margin:0;">
+        Choisis la texture à appliquer sur le modèle :
+      </p>
+      <div id="ytdpicker-list" style="display:flex; flex-direction:column; gap:4px; max-height:240px; overflow-y:auto;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:4px;">
+        <button class="tb-btn" id="btn-ytdpicker-cancel">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (CDN remplacé par local dans le plugin final) -->
+  <script src="index.js"></script>
+</body>
+</html>

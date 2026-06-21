@@ -1,0 +1,56 @@
+{
+  "id": "com.ydrpreview.plugin",
+  "name": "GTA Prop Viewer",
+  "version": "1.0.0",
+  "main": "index.html",
+  "manifestVersion": 6,
+  "host": {
+    "app": "PS",
+    "minVersion": "23.0.0"
+  },
+  "icons": [
+    { "width": 23, "height": 23, "path": "icons/icon_D.png",    "scale": [1, 2], "theme": ["dark", "darkest"] },
+    { "width": 23, "height": 23, "path": "icons/icon_N.png",    "scale": [1, 2], "theme": ["lightest", "light"] }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "ydrPreviewPanel",
+      "label": {
+        "default": "GTA Prop Viewer"
+      },
+      "main": "index.html",
+      "minimumSize": { "width": 300, "height": 400 },
+      "preferredDockedSize": { "width": 380, "height": 600 },
+      "maximumSize": { "width": 800, "height": 1200 },
+      "icons": [
+        { "width": 23, "height": 23, "path": "icons/dark.png",  "scale": [1, 2], "theme": ["darkest", "dark", "medium"] },
+        { "width": 23, "height": 23, "path": "icons/light.png", "scale": [1, 2], "theme": ["lightest", "light"] }
+      ]
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "launchProcess": {
+      "schemes": [],
+      "extensions": [".bat", ".exe", ""]
+    },
+    "network": {
+      "domains": [
+        "http://127.0.0.1:8743",
+        "http://localhost:8743"
+      ]
+    },
+    "webview": {
+      "allow": "yes",
+      "domains": [
+        "http://127.0.0.1:8743",
+        "http://localhost:8743"
+      ],
+      "enableMessageBridge": "localAndRemote"
+    },
+    "ipc": {
+      "enablePluginCommunication": true
+    }
+  }
+}
